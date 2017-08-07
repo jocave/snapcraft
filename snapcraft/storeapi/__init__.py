@@ -215,15 +215,15 @@ class StoreClient():
         return self._refresh_if_necessary(
             self.sca.register, snap_name, is_private, constants.DEFAULT_SERIES)
 
-    def push_precheck(self, snap_name):
+    def push_precheck(self, snap_name, store_id):
         return self._refresh_if_necessary(
-            self.sca.snap_push_precheck, snap_name)
+            self.sca.snap_push_precheck, snap_name, store_id)
 
     def push_snap_build(self, snap_id, snap_build):
         return self._refresh_if_necessary(
             self.sca.push_snap_build, snap_id, snap_build)
 
-    def upload(self, snap_name, snap_filename, delta_format=None,
+    def upload(self, snap_name, snap_filename, store_id, delta_format=None,
                source_hash=None, target_hash=None, delta_hash=None):
         # FIXME This should be raised by the function that uses the
         # discharge. --elopio -2016-06-20
@@ -234,7 +234,7 @@ class StoreClient():
         updown_data = _upload.upload_files(snap_filename, self.updown)
 
         return self._refresh_if_necessary(
-            self.sca.snap_push_metadata, snap_name, updown_data,
+            self.sca.snap_push_metadata, snap_name, updown_data, store_id,
             delta_format=delta_format, source_hash=source_hash,
             target_hash=target_hash, delta_hash=delta_hash)
 
@@ -572,21 +572,24 @@ class SCAClient(Client):
         if not response.ok:
             raise errors.StoreRegistrationError(snap_name, response)
 
-    def snap_push_precheck(self, snap_name):
+    def snap_push_precheck(self, snap_name, store_id):
         data = {
             'name': snap_name,
             'dry_run': True,
         }
         auth = _macaroon_auth(self.conf)
-        response = self.post(
-            'snap-push/', data=json.dumps(data),
-            headers={'Authorization': auth,
+        headers={'Authorization': auth,
                      'Content-Type': 'application/json',
-                     'Accept': 'application/json'})
+                     'Accept': 'application/json'}
+        if store_id:
+            headers['X-Ubuntu-Store'] = store_id
+        response = self.post(
+            'snap-push/', data=json.dumps(data), headers=headers)
+
         if not response.ok:
             raise errors.StorePushError(data['name'], response)
 
-    def snap_push_metadata(self, snap_name, updown_data,
+    def snap_push_metadata(self, snap_name, updown_data, store_id,
                            delta_format=None, delta_hash=None,
                            source_hash=None, target_hash=None):
         data = {
@@ -601,12 +604,15 @@ class SCAClient(Client):
             data['delta_hash'] = delta_hash
             data['source_hash'] = source_hash
             data['target_hash'] = target_hash
-        auth = _macaroon_auth(self.conf)
+
+        headers={'Authorization': _macaroon_auth(self.conf),
+                 'Content-Type': 'application/json',
+                 'Accept': 'application/json'}
+        if store_id:
+            headers['X-Ubuntu-Store'] = store_id
+
         response = self.post(
-            'snap-push/', data=json.dumps(data),
-            headers={'Authorization': auth,
-                     'Content-Type': 'application/json',
-                     'Accept': 'application/json'})
+            'snap-push/', data=json.dumps(data), headers=headers)
         if not response.ok:
             raise errors.StorePushError(data['name'], response)
 

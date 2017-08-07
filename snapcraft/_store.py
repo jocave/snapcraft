@@ -380,7 +380,7 @@ def sign_build(snap_filename, key_name=None, local=False):
             'Build assertion {} pushed to the Store.'.format(snap_build_path))
 
 
-def push(snap_filename, release_channels=None):
+def push(snap_filename, release_channels=None, store_id=None):
     """Push a snap_filename to the store.
 
     If a cached snap is available, a delta will be generated from
@@ -397,7 +397,7 @@ def push(snap_filename, release_channels=None):
 
     logger.info('Preparing to push {!r} to the store.'.format(snap_filename))
     with _requires_login():
-        store.push_precheck(snap_name)
+        store.push_precheck(snap_name, store_id)
 
     snap_cache = cache.SnapCache(project_name=snap_name)
     arch = snap_yaml['architectures'][0]
@@ -407,20 +407,21 @@ def push(snap_filename, release_channels=None):
 
     if sha3_384_available and source_snap:
         try:
-            result = _push_delta(snap_name, snap_filename, source_snap)
+            result = _push_delta(snap_name, snap_filename, source_snap,
+                                 store_id)
         except storeapi.errors.StoreDeltaApplicationError as e:
             logger.warning(
                 'Error generating delta: {}\n'
                 'Falling back to pushing full snap...'.format(str(e)))
-            result = _push_snap(snap_name, snap_filename)
+            result = _push_snap(snap_name, snap_filename, store_id)
         except storeapi.errors.StorePushError as e:
             store_error = e.error_list[0].get('message')
             logger.warning(
                 'Unable to push delta to store: {}\n'
                 'Falling back to pushing full snap...'.format(store_error))
-            result = _push_snap(snap_name, snap_filename)
+            result = _push_snap(snap_name, snap_filename, store_id)
     else:
-        result = _push_snap(snap_name, snap_filename)
+        result = _push_snap(snap_name, snap_filename, store_id)
 
     # This is workaround until LP: #1599875 is solved
     if 'revision' in result:
@@ -437,16 +438,16 @@ def push(snap_filename, release_channels=None):
         release(snap_name, result['revision'], release_channels)
 
 
-def _push_snap(snap_name, snap_filename):
+def _push_snap(snap_name, snap_filename, store_id):
     store = storeapi.StoreClient()
     with _requires_login():
-        tracker = store.upload(snap_name, snap_filename)
+        tracker = store.upload(snap_name, snap_filename, store_id)
     result = tracker.track()
     tracker.raise_for_code()
     return result
 
 
-def _push_delta(snap_name, snap_filename, source_snap):
+def _push_delta(snap_name, snap_filename, source_snap, store_id):
     store = storeapi.StoreClient()
     delta_format = 'xdelta3'
     logger.info('Found cached source snap {}.'.format(source_snap))
@@ -470,6 +471,7 @@ def _push_delta(snap_name, snap_filename, source_snap):
             delta_tracker = store.upload(
                 snap_name,
                 delta_filename,
+                store_id,
                 delta_format=delta_format,
                 source_hash=snap_hashes['source_hash'],
                 target_hash=snap_hashes['target_hash'],

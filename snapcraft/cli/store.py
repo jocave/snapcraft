@@ -84,12 +84,14 @@ def register(snap_name, private):
 @click.option('--release', metavar='<channels>',
               help='Optional comma separated list of channels to release '
                    '<snap-file>')
+@click.option('--store-id', metavar='<id>',
+              help='Optional ID of alternative store to push to <id>')
 @click.argument('snap-file', metavar='<snap-file>',
                 type=click.Path(exists=True,
                                 readable=True,
                                 resolve_path=True,
                                 dir_okay=False))
-def push(snap_file, release):
+def push(snap_file, release, store_id):
     """Push <snap-file> to the store.
     By passing --release with a comma separated list of channels the snap would
     be released to the selected channels if the store review passes for this
@@ -108,6 +110,8 @@ def push(snap_file, release):
         snapcraft push my-snap_0.3_amd64.snap --release candidate,beta
     """
     click.echo('Pushing {}'.format(os.path.basename(snap_file)))
+    if store_id:
+        click.echo('ID of target store {}'.format(store_id))
     channel_list = []
     if release:
         channel_list = release.split(',')
@@ -115,7 +119,7 @@ def push(snap_file, release):
             'After pushing, an attempt to release to {} '
             'will be made'.format(channel_list))
 
-    snapcraft.push(snap_file, channel_list)
+    snapcraft.push(snap_file, channel_list, store_id)
 
 
 @storecli.command()
